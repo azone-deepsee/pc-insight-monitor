@@ -1,0 +1,8 @@
+{
+  "qr_log": {
+    "enabled": false,
+    "directory": "",
+    "pattern": "*.csv",
+    "comment": "QRツールのUSB接続ログCSVがあるフォルダパスを指定（例: D:\\\\Logs\\\\QR）"
+  }
+}

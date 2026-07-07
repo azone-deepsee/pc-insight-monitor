@@ -1,0 +1,7 @@
+python/
+python/**
+!python/.gitkeep
+
+__pycache__/
+*.py[cod]
+*$py.class
