@@ -4,5 +4,14 @@
     "directory": "",
     "pattern": "*.csv",
     "comment": "QRツールのUSB接続ログCSVがあるフォルダパスを指定（例: D:\\\\Logs\\\\QR）"
+  },
+  "monitoring": {
+    "poll_interval_sec": 2,
+    "ping_target": "8.8.8.8",
+    "enable_system_metrics": true,
+    "enable_network_metrics": true,
+    "enable_gpu": true,
+    "metrics_max_points": 300,
+    "comment_ping": "業務ネットワークのゲートウェイや社内サーバIPに変更可能"
   }
 }

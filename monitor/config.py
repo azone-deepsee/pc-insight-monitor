@@ -11,20 +11,31 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "enabled": False,
         "directory": "",
         "pattern": "*.csv",
-    }
+    },
+    "monitoring": {
+        "poll_interval_sec": 2,
+        "ping_target": "8.8.8.8",
+        "enable_system_metrics": True,
+        "enable_network_metrics": True,
+        "enable_gpu": True,
+        "metrics_max_points": 300,
+    },
 }
 
 
 def load_config() -> dict[str, Any]:
     if not CONFIG_PATH.exists():
-        return dict(DEFAULT_CONFIG)
+        return json.loads(json.dumps(DEFAULT_CONFIG))
     try:
         with CONFIG_PATH.open(encoding="utf-8-sig") as fp:
             data = json.load(fp)
     except (json.JSONDecodeError, OSError):
-        return dict(DEFAULT_CONFIG)
-    merged = dict(DEFAULT_CONFIG)
-    merged.update(data)
-    if "qr_log" in data and isinstance(data["qr_log"], dict):
-        merged["qr_log"] = {**DEFAULT_CONFIG["qr_log"], **data["qr_log"]}
+        return json.loads(json.dumps(DEFAULT_CONFIG))
+
+    merged = json.loads(json.dumps(DEFAULT_CONFIG))
+    for key, value in data.items():
+        if key in merged and isinstance(merged[key], dict) and isinstance(value, dict):
+            merged[key] = {**merged[key], **value}
+        else:
+            merged[key] = value
     return merged
