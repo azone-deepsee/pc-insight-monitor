@@ -40,7 +40,7 @@ class App(tk.Tk):
 
     def __init__(self) -> None:
         super().__init__()
-        self.title("PC Insight Monitor α v1.1")
+        self.title("PC Insight Monitor α v1.1.1")
         self.geometry("1200x780")
         self.minsize(960, 640)
 
@@ -232,7 +232,7 @@ class App(tk.Tk):
         qr_dir = qr_cfg.get("directory") or "（未設定）"
         ping_target = mon_cfg.get("ping_target", "8.8.8.8")
         lines = [
-            "PC Insight Monitor α v1.1",
+            "PC Insight Monitor α v1.1.1",
             "",
             "この版でできること:",
             "  - COMポート / USBデバイスの状態監視",
