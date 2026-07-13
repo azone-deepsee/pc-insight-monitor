@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import subprocess
 import threading
 import time
@@ -9,20 +10,8 @@ from typing import Dict, Optional
 from .base import EventBus, MonitorEvent
 from .metrics_store import MetricsStore
 
-POLL_INTERVAL_SEC = 2.0
-
-PING_PS = [
-    "powershell",
-    "-NoProfile",
-    "-ExecutionPolicy",
-    "Bypass",
-    "-Command",
-    (
-        "param($t); "
-        "$r = Test-Connection -ComputerName $t -Count 1 -ErrorAction SilentlyContinue; "
-        "if ($r) { $r.ResponseTime } else { -1 }"
-    ),
-]
+POLL_INTERVAL_SEC = 3.0
+PING_INTERVAL_SEC = 5.0
 
 
 class NetworkWatcher:
@@ -34,15 +23,18 @@ class NetworkWatcher:
         metrics: MetricsStore,
         ping_target: str = "8.8.8.8",
         interval: float = POLL_INTERVAL_SEC,
+        ping_interval: float = PING_INTERVAL_SEC,
     ) -> None:
         self.bus = bus
         self.metrics = metrics
         self.ping_target = ping_target.strip() or "8.8.8.8"
         self.interval = interval
+        self.ping_interval = ping_interval
         self._thread: Optional[threading.Thread] = None
         self._stop = threading.Event()
         self._psutil = self._load_psutil()
         self._last_io: Optional[Dict[str, int]] = None
+        self._last_ping_at = 0.0
         self._last_ping_alert = 0.0
 
     @staticmethod
@@ -105,26 +97,29 @@ class NetworkWatcher:
             self.metrics.add("net_recv_kbps", max(0.0, recv_kbps), now)
         self._last_io = current
 
-        ping_ms = self._ping()
-        if ping_ms is not None:
-            self.metrics.add("ping_ms", ping_ms, now)
-            if ping_ms < 0:
-                self._maybe_alert_ping_fail(now)
+        if time.monotonic() - self._last_ping_at >= self.ping_interval:
+            self._last_ping_at = time.monotonic()
+            ping_ms = self._ping()
+            if ping_ms is not None:
+                self.metrics.add("ping_ms", ping_ms, now)
+                if ping_ms < 0:
+                    self._maybe_alert_ping_fail(now)
 
     def _ping(self) -> Optional[float]:
         try:
             result = subprocess.run(
-                [*PING_PS, self.ping_target],
+                ["ping", "-n", "1", "-w", "1000", self.ping_target],
                 capture_output=True,
-                timeout=10,
+                timeout=5,
                 creationflags=subprocess.CREATE_NO_WINDOW,
             )
             if result.returncode != 0:
                 return -1.0
-            text = (result.stdout or b"").decode("utf-8", errors="replace").strip()
-            if not text:
+            text = (result.stdout or b"").decode("cp932", errors="replace")
+            match = re.search(r"(?:時間|time)[=<]\s*(\d+)\s*ms", text, re.IGNORECASE)
+            if not match:
                 return -1.0
-            return float(text)
+            return float(match.group(1))
         except Exception:
             return -1.0
 

@@ -1,6 +1,6 @@
 # PC Insight Monitor
 
-**α版 v1.1.1** — USB / COM トラブル調査用のリアルタイム監視ツール
+**α版 v1.2.0** — USB / COM トラブル調査用のリアルタイム監視ツール
 
 現場PCでバラバラに確認していた USB・COM・Windowsイベントログ・QRツールの接続ログを、**1本のタイムライン** にまとめて表示します。
 
@@ -9,7 +9,8 @@
 ## 特徴
 
 - **サーバ不要** — Webサーバや exe は使いません
-- **Python インストール不要** — ポータブル Python を同梱してファイルサーバから実行
+- **軽量配布** — 不要ファイルを除いたポータブル Python（約100MB目安）
+- **ローカルキャッシュ起動** — ファイルサーバから実行時、初回同期後はローカルから高速起動
 - **QRツール改修不要** — 既存の USB 接続 CSV ログを取り込んで統合表示
 - **調査時に手動起動** — 常時バックグラウンド監視は将来対応（α版は調査用）
 
@@ -22,7 +23,7 @@
 | OS | Windows 10 / 11（64bit） |
 | 権限 | 一般ユーザー（管理者不要な場合が多い） |
 | ネットワーク | ファイルサーバからフォルダ実行可能であること |
-| その他 | PowerShell 実行可 |
+| その他 | WMI 利用（USB/COM監視）。PowerShell は GPU 監視時のみ |
 
 ---
 
@@ -44,8 +45,10 @@
 setup_portable.bat
 ```
 
-これにより `python\` フォルダに Python 埋め込み版と依存パッケージが入ります。  
+これにより `python\` フォルダに軽量化した Python と依存パッケージが入ります（約100MB目安）。  
 完了後、フォルダ一式をファイルサーバへ配置してください。
+
+> **Note:** 現場PCで `run.bat` を実行すると、初回のみ `%LOCALAPPDATA%\PCInsightMonitor\app` へ同期し、2回目以降はローカルから起動します。
 
 ---
 
@@ -97,8 +100,11 @@ QRツールが出力している USB 接続/遮断 CSV を、調査時にタイ�
 | `qr_log.directory` | QRツールのログフォルダパス |
 | `qr_log.pattern` | 取り込むファイル（既定: `*.csv`） |
 | `monitoring.ping_target` | 疎通確認先（社内ゲートウェイ等に変更推奨） |
-| `monitoring.enable_system_metrics` | CPU / メモリ / GPU 監視 |
+| `monitoring.enable_system_metrics` | CPU / メモリ監視 |
 | `monitoring.enable_network_metrics` | ネットワーク I/O・Ping 監視 |
+| `monitoring.enable_gpu` | GPU 監視（既定: オフ。負荷が高いため） |
+| `monitoring.ping_interval_sec` | Ping 間隔（秒） |
+| `monitoring.suppress_initial_device_events` | 監視開始直後の初回検出をタイムラインに出さない |
 
 ### 取込手順
 
@@ -410,7 +416,8 @@ run.bat
 
 | フェーズ | 内容 |
 |----------|------|
-| **α v1.1.1（現在）** | setup_portable.bat 修正（既存 Python 3.12 コピー方式） |
+| **α v1.2.0（現在）** | 軽量化配布、ローカルキャッシュ起動、WMI監視、負荷削減 |
+| **α v1.1.1** | setup_portable.bat 修正（既存 Python 3.12 コピー方式） |
 | **α v1.1** | グラフ（ネットワーク/CPU/メモリ/GPU）、相関分析、起動診断 |
 | **α v1.0** | 調査用手動監視、タイムライン、QRログ取込 |
 | Phase 2 | スナップショット、高度なアラート、フィルタ強化 |
@@ -429,6 +436,7 @@ run.bat
 
 | バージョン | 日付 | 備考 |
 |------------|------|------|
+| α v1.2.0 | 2026-07-13 | 軽量化配布、ローカルキャッシュ起動、WMI監視、監視負荷削減 |
 | α v1.1.1 | 2026-07-11 | setup_portable.bat 修正、既存 Python 3.12 コピー方式 |
 | α v1.1 | 2026-07-09 | グラフ・相関分析・起動診断、tkinter 同梱 Python、現場調査ガイド |
 | α v1.0 | 2026-07-07 | 初回公開 |

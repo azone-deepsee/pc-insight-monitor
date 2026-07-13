@@ -13,11 +13,15 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "pattern": "*.csv",
     },
     "monitoring": {
-        "poll_interval_sec": 2,
+        "poll_interval_sec": 3,
         "ping_target": "8.8.8.8",
+        "ping_interval_sec": 5,
+        "gpu_interval_sec": 10,
         "enable_system_metrics": True,
         "enable_network_metrics": True,
-        "enable_gpu": True,
+        "enable_gpu": False,
+        "suppress_initial_device_events": True,
+        "use_local_cache": True,
         "metrics_max_points": 300,
     },
 }

@@ -6,12 +6,16 @@
     "comment": "QRツールのUSB接続ログCSVがあるフォルダパスを指定（例: D:\\\\Logs\\\\QR）"
   },
   "monitoring": {
-    "poll_interval_sec": 2,
+    "poll_interval_sec": 3,
     "ping_target": "8.8.8.8",
+    "ping_interval_sec": 5,
+    "gpu_interval_sec": 10,
     "enable_system_metrics": true,
     "enable_network_metrics": true,
-    "enable_gpu": true,
+    "enable_gpu": false,
+    "suppress_initial_device_events": true,
+    "use_local_cache": true,
     "metrics_max_points": 300,
-    "comment_ping": "業務ネットワークのゲートウェイや社内サーバIPに変更可能"
+    "comment_ping": "業務ネットワークのゲートウェイや社内サーバIPに変更推奨"
   }
 }

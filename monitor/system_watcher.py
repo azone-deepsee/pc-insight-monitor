@@ -9,7 +9,8 @@ from typing import Optional
 from .base import EventBus, MonitorEvent
 from .metrics_store import MetricsStore
 
-POLL_INTERVAL_SEC = 2.0
+POLL_INTERVAL_SEC = 3.0
+GPU_INTERVAL_SEC = 10.0
 
 GPU_PS = [
     "powershell",
@@ -34,17 +35,20 @@ class SystemWatcher:
         bus: EventBus,
         metrics: MetricsStore,
         interval: float = POLL_INTERVAL_SEC,
-        gpu_enabled: bool = True,
+        gpu_enabled: bool = False,
+        gpu_interval: float = GPU_INTERVAL_SEC,
     ) -> None:
         self.bus = bus
         self.metrics = metrics
         self.interval = interval
         self.gpu_enabled = gpu_enabled
+        self.gpu_interval = gpu_interval
         self._thread: Optional[threading.Thread] = None
         self._stop = threading.Event()
         self._psutil = self._load_psutil()
         self._last_cpu_alert = 0.0
         self._last_mem_alert = 0.0
+        self._last_gpu_at = 0.0
 
     @staticmethod
     def _load_psutil():
@@ -103,16 +107,16 @@ class SystemWatcher:
         self.metrics.add("cpu_percent", cpu, now)
         self.metrics.add("memory_percent", mem, now)
 
-        gpu = self._read_gpu_percent()
-        if gpu is not None and gpu >= 0:
-            self.metrics.add("gpu_percent", gpu, now)
+        if self.gpu_enabled and time.monotonic() - self._last_gpu_at >= self.gpu_interval:
+            self._last_gpu_at = time.monotonic()
+            gpu = self._read_gpu_percent()
+            if gpu is not None and gpu >= 0:
+                self.metrics.add("gpu_percent", gpu, now)
 
         self._maybe_alert_cpu(cpu, now)
         self._maybe_alert_mem(mem, now)
 
     def _read_gpu_percent(self) -> Optional[float]:
-        if not self.gpu_enabled:
-            return None
         try:
             result = subprocess.run(
                 GPU_PS,

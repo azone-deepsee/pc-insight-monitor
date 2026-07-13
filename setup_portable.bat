@@ -32,8 +32,6 @@ if exist "%PYDIR%\python.exe" (
 
 mkdir "%PYDIR%" 2>nul
 
-REM --- 方法A: 開発PCの Python 3.12 を丸ごとコピー（推奨） ---
-REM 同一PCに Python 3.12 があると、インストーラは TargetDir を無視する既知の問題があるため。
 if exist "%LOCALAPPDATA%\Programs\Python\Python312\python.exe" (
     set "SOURCE_PY=%LOCALAPPDATA%\Programs\Python\Python312"
     goto :copy_python
@@ -46,23 +44,22 @@ if defined SOURCE_PY goto :copy_python
 
 :copy_python
 if defined SOURCE_PY (
-    echo [1/4] 開発PCの Python 3.12 をコピーします...
+    echo [1/5] 開発PCの Python 3.12 をコピーします...
     echo       コピー元: %SOURCE_PY%
     echo       コピー先: %PYDIR%
     echo.
     rmdir /s /q "%PYDIR%" 2>nul
     mkdir "%PYDIR%"
-    robocopy "%SOURCE_PY%" "%PYDIR%" /E /NFL /NDL /NJH /NJS /NC /NS >nul
+    robocopy "%SOURCE_PY%" "%PYDIR%" /E /XD test idlelib turtledemo ensurepip Doc Include nmake __pycache__ /XF *.pdb *.lib *.pyc /NFL /NDL /NJH /NJS /NC /NS >nul
     if exist "%PYDIR%\python.exe" (
         set "SETUP_METHOD=copy"
-        goto :install_deps
+        goto :trim_python
     )
     echo [警告] コピーに失敗しました。インストーラ方式を試します。
     echo.
 )
 
-REM --- 方法B: インストーラで新規配置（Python 3.12 未導入のPC向け） ---
-echo [1/4] Python インストーラをダウンロード（tkinter 同梱版）...
+echo [1/5] Python インストーラをダウンロード...
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$ProgressPreference='SilentlyContinue'; Invoke-WebRequest -Uri '%PYURL%' -OutFile '%PYTEMP%'"
 
@@ -71,29 +68,34 @@ if errorlevel 1 (
     goto :fail
 )
 
-echo [2/4] Python をポータブルフォルダへインストール...
-echo       ※ 開発PCに Python 3.12 が既にある場合、この方式は失敗することがあります。
-echo.
-
+echo [2/5] Python をポータブルフォルダへインストール...
 start /wait "" "%PYTEMP%" /quiet InstallAllUsers=0 PrependPath=0 Include_test=0 Include_doc=0 Include_launcher=0 Include_pip=1 Include_tcltk=1 TargetDir="%PYDIR%"
 
 if not exist "%PYDIR%\python.exe" (
     echo [エラー] Python のインストールに失敗しました。
-    echo.
-    echo よくある原因:
-    echo   開発PCに Python 3.12 が既にインストールされている
-    echo   ^(この場合、インストーラが TargetDir を無視します^)
-    echo.
-    echo 対処:
-    echo   1. https://www.python.org/downloads/ から Python 3.12 をインストール
-    echo   2. この setup_portable.bat を再実行 ^(自動でコピー方式に切り替わります^)
-    echo.
+    echo 開発PCに Python 3.12 をインストールしてから再実行してください。
     goto :fail
 )
 set "SETUP_METHOD=installer"
 
+:trim_python
+echo [2/5] 不要ファイルを削除して軽量化しています...
+if exist "%PYDIR%\Lib\test" rmdir /s /q "%PYDIR%\Lib\test"
+if exist "%PYDIR%\Lib\idlelib" rmdir /s /q "%PYDIR%\Lib\idlelib"
+if exist "%PYDIR%\Lib\turtledemo" rmdir /s /q "%PYDIR%\Lib\turtledemo"
+if exist "%PYDIR%\Lib\ensurepip" rmdir /s /q "%PYDIR%\Lib\ensurepip"
+if exist "%PYDIR%\Doc" rmdir /s /q "%PYDIR%\Doc"
+if exist "%PYDIR%\Include" rmdir /s /q "%PYDIR%\Include"
+if exist "%PYDIR%\tcl\nmake" rmdir /s /q "%PYDIR%\tcl\nmake"
+powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+  "Get-ChildItem -LiteralPath '%PYDIR%' -Recurse -Directory -Filter '__pycache__' -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
+
+for /f "delims=" %%s in ('powershell -NoProfile -Command "(Get-ChildItem -LiteralPath '%PYDIR%' -Recurse -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum / 1MB"') do (
+    echo       python フォルダサイズ: 約 %%s MB
+)
+
 :install_deps
-echo [3/4] 依存パッケージをインストール...
+echo [3/5] 依存パッケージをインストール...
 "%PYDIR%\python.exe" -m pip install --no-warn-script-location -r "%CD%\requirements.txt"
 if errorlevel 1 (
     echo 依存パッケージのインストールに失敗しました。
@@ -104,8 +106,8 @@ if exist "%PYDIR%\Scripts\pywin32_postinstall.py" (
     "%PYDIR%\python.exe" "%PYDIR%\Scripts\pywin32_postinstall.py" -install >nul 2>&1
 )
 
-echo [4/4] 動作確認...
-"%PYDIR%\python.exe" -c "import tkinter; import win32evtlog; import psutil; print('All OK')"
+echo [4/5] 動作確認...
+"%PYDIR%\python.exe" -c "import tkinter; import win32evtlog; import psutil; import win32com.client; print('All OK')"
 if errorlevel 1 (
     echo 動作確認に失敗しました。diagnose.bat で詳細を確認してください。
     goto :fail
@@ -113,11 +115,11 @@ if errorlevel 1 (
 
 del "%PYTEMP%" >nul 2>&1
 
+echo [5/5] 完了
 echo.
 echo 完了しました。方式: %SETUP_METHOD%
 echo このフォルダ一式をファイルサーバへ配置してください。
 echo 現場PCでは run.bat を実行してください。
-echo 起動できない場合は diagnose.bat を実行してください。
 echo.
 popd 2>nul
 pause

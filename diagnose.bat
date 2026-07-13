@@ -55,13 +55,13 @@ if errorlevel 1 (
 )
 
 echo.
-echo --- PowerShell 確認 ---
-powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-PnpDevice -Class Ports -ErrorAction SilentlyContinue | Select-Object -First 1 | Out-Null; Write-Host 'PowerShell OK'" 2>&1
+echo --- WMI 確認（USB/COM監視）---
+"%PYEXE%" -c "import pythoncom,win32com.client; pythoncom.CoInitialize(); w=win32com.client.GetObject('winmgmts:'); list(w.ExecQuery('SELECT Caption FROM Win32_PnPEntity WHERE PNPClass=''Ports''')); print('WMI OK')" 2>&1
 if errorlevel 1 (
-    echo [NG] PowerShell / Get-PnpDevice が失敗しました
+    echo [NG] WMI / Win32_PnPEntity
     set "FAIL=1"
 ) else (
-    echo [OK] PowerShell / Get-PnpDevice
+    echo [OK] WMI / Win32_PnPEntity
 )
 
 echo.

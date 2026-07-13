@@ -40,7 +40,7 @@ class App(tk.Tk):
 
     def __init__(self) -> None:
         super().__init__()
-        self.title("PC Insight Monitor α v1.1.1")
+        self.title("PC Insight Monitor α v1.2.0")
         self.geometry("1200x780")
         self.minsize(960, 640)
 
@@ -52,19 +52,25 @@ class App(tk.Tk):
         self.logger = CsvLogger()
         self.metrics = MetricsStore(max_points=int(mon_cfg.get("metrics_max_points", 300)))
 
-        self.usb_watcher = UsbWatcher(self.bus, interval=self.poll_interval)
+        self.usb_watcher = UsbWatcher(
+            self.bus,
+            interval=self.poll_interval,
+            suppress_initial_events=bool(mon_cfg.get("suppress_initial_device_events", True)),
+        )
         self.event_watcher = EventWatcher(self.bus, interval=self.poll_interval)
         self.system_watcher = SystemWatcher(
             self.bus,
             self.metrics,
             interval=self.poll_interval,
-            gpu_enabled=bool(mon_cfg.get("enable_gpu", True)),
+            gpu_enabled=bool(mon_cfg.get("enable_gpu", False)),
+            gpu_interval=float(mon_cfg.get("gpu_interval_sec", 10)),
         )
         self.network_watcher = NetworkWatcher(
             self.bus,
             self.metrics,
             ping_target=str(mon_cfg.get("ping_target", "8.8.8.8")),
             interval=self.poll_interval,
+            ping_interval=float(mon_cfg.get("ping_interval_sec", 5)),
         )
 
         self._event_queue: queue.Queue[MonitorEvent] = queue.Queue()
@@ -232,7 +238,7 @@ class App(tk.Tk):
         qr_dir = qr_cfg.get("directory") or "（未設定）"
         ping_target = mon_cfg.get("ping_target", "8.8.8.8")
         lines = [
-            "PC Insight Monitor α v1.1.1",
+            "PC Insight Monitor α v1.2.0",
             "",
             "この版でできること:",
             "  - COMポート / USBデバイスの状態監視",

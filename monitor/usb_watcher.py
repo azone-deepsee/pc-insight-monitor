@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import json
-import subprocess
 import threading
 import time
 from datetime import datetime
@@ -9,46 +7,64 @@ from typing import Dict, List, Optional
 
 from .base import EventBus, MonitorEvent
 
-POLL_INTERVAL_SEC = 2.0
-
-POWERSHELL = [
-    "powershell",
-    "-NoProfile",
-    "-ExecutionPolicy",
-    "Bypass",
-    "-Command",
-    (
-        "$ports = Get-PnpDevice -Class Ports -ErrorAction SilentlyContinue | "
-        "Select-Object FriendlyName, InstanceId, Status; "
-        "$usb = Get-PnpDevice -Class USB -ErrorAction SilentlyContinue | "
-        "Select-Object FriendlyName, InstanceId, Status; "
-        "@{ports=$ports; usb=$usb} | ConvertTo-Json -Depth 4 -Compress"
-    ),
-]
+POLL_INTERVAL_SEC = 3.0
 
 
-def _decode_powershell_output(data: bytes) -> str:
-    """日本語WindowsのPowerShell出力（主にcp932）をデコードする。"""
-    if not data:
-        return ""
-    for encoding in ("utf-8-sig", "utf-8", "cp932"):
-        try:
-            return data.decode(encoding)
-        except UnicodeDecodeError:
-            continue
-    return data.decode("cp932", errors="replace")
+def _fetch_devices_wmi() -> dict:
+    """WMI で COM/USB デバイス一覧を取得（PowerShell 起動不要）。"""
+    import pythoncom
+    import win32com.client
+
+    pythoncom.CoInitialize()
+    try:
+        wmi = win32com.client.GetObject("winmgmts:")
+        ports: List[dict] = []
+        usb: List[dict] = []
+
+        for item in wmi.ExecQuery(
+            "SELECT Caption, DeviceID, Status FROM Win32_PnPEntity WHERE PNPClass='Ports'"
+        ):
+            ports.append(
+                {
+                    "FriendlyName": str(item.Caption or "不明"),
+                    "InstanceId": str(item.DeviceID or ""),
+                    "Status": str(item.Status or "Unknown"),
+                }
+            )
+
+        for item in wmi.ExecQuery(
+            "SELECT Caption, DeviceID, Status FROM Win32_PnPEntity WHERE PNPClass='USB'"
+        ):
+            usb.append(
+                {
+                    "FriendlyName": str(item.Caption or "不明"),
+                    "InstanceId": str(item.DeviceID or ""),
+                    "Status": str(item.Status or "Unknown"),
+                }
+            )
+
+        return {"ports": ports, "usb": usb}
+    finally:
+        pythoncom.CoUninitialize()
 
 
 class UsbWatcher:
     """COMポートとUSBデバイスの状態変化を監視する。"""
 
-    def __init__(self, bus: EventBus, interval: float = POLL_INTERVAL_SEC) -> None:
+    def __init__(
+        self,
+        bus: EventBus,
+        interval: float = POLL_INTERVAL_SEC,
+        suppress_initial_events: bool = True,
+    ) -> None:
         self.bus = bus
         self.interval = interval
+        self.suppress_initial_events = suppress_initial_events
         self._thread: Optional[threading.Thread] = None
         self._stop = threading.Event()
         self._known_ports: Dict[str, str] = {}
         self._known_usb: Dict[str, str] = {}
+        self._baselined = False
         self.latest_ports: List[dict] = []
         self.latest_usb: List[dict] = []
 
@@ -79,35 +95,20 @@ class UsbWatcher:
             self._stop.wait(self.interval)
 
     def _poll(self) -> None:
-        raw = self._fetch_devices()
+        raw = _fetch_devices_wmi()
         ports = raw.get("ports") or []
         usb = raw.get("usb") or []
 
-        if isinstance(ports, dict):
-            ports = [ports]
-        if isinstance(usb, dict):
-            usb = [usb]
+        publish_events = not (self.suppress_initial_events and not self._baselined)
 
         self.latest_ports = ports
         self.latest_usb = usb
 
-        self._detect_changes(ports, self._known_ports, "COM", "port")
-        self._detect_changes(usb, self._known_usb, "USB", "device")
+        self._detect_changes(ports, self._known_ports, "COM", "port", publish_events)
+        self._detect_changes(usb, self._known_usb, "USB", "device", publish_events)
 
-    def _fetch_devices(self) -> dict:
-        result = subprocess.run(
-            POWERSHELL,
-            capture_output=True,
-            timeout=30,
-            creationflags=subprocess.CREATE_NO_WINDOW,
-        )
-        if result.returncode != 0:
-            stderr = _decode_powershell_output(result.stderr).strip()
-            raise RuntimeError(stderr or "PowerShell failed")
-        output = _decode_powershell_output(result.stdout).strip()
-        if not output:
-            return {"ports": [], "usb": []}
-        return json.loads(output)
+        if not self._baselined:
+            self._baselined = True
 
     def _detect_changes(
         self,
@@ -115,6 +116,7 @@ class UsbWatcher:
         known: Dict[str, str],
         label: str,
         category: str,
+        publish_events: bool,
     ) -> None:
         current: Dict[str, str] = {}
         for item in devices:
@@ -124,6 +126,8 @@ class UsbWatcher:
             current[instance_id] = status
 
             prev = known.get(instance_id)
+            if not publish_events:
+                continue
             if prev is None:
                 self.bus.publish(
                     MonitorEvent(
@@ -145,17 +149,18 @@ class UsbWatcher:
                     )
                 )
 
-        for instance_id, prev_status in known.items():
-            if instance_id not in current:
-                self.bus.publish(
-                    MonitorEvent(
-                        timestamp=datetime.now(),
-                        source=label,
-                        category=category,
-                        message=f"{instance_id} が一覧から消えました (前回: {prev_status})",
-                        severity="warning",
+        if publish_events:
+            for instance_id, prev_status in known.items():
+                if instance_id not in current:
+                    self.bus.publish(
+                        MonitorEvent(
+                            timestamp=datetime.now(),
+                            source=label,
+                            category=category,
+                            message=f"{instance_id} が一覧から消えました (前回: {prev_status})",
+                            severity="warning",
+                        )
                     )
-                )
 
         known.clear()
         known.update(current)
