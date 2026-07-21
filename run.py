@@ -238,7 +238,7 @@ class App(tk.Tk):
         qr_dir = qr_cfg.get("directory") or "（未設定）"
         ping_target = mon_cfg.get("ping_target", "8.8.8.8")
         lines = [
-            "PC Insight Monitor α v1.2.0",
+            "PC Insight Monitor α v1.2.1",
             "",
             "この版でできること:",
             "  - COMポート / USBデバイスの状態監視",
